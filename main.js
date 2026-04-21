@@ -122,6 +122,16 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
+// ========== 左上ステータス表示 ==========
+const statsEl = document.createElement('div');
+Object.assign(statsEl.style, {
+    position: 'fixed', top: '12px', left: '12px',
+    color: 'rgba(255,255,255,0.75)', fontFamily: 'monospace',
+    fontSize: '13px', lineHeight: '1.6', pointerEvents: 'none',
+    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+});
+document.body.appendChild(statsEl);
+
 // オービットコントロール
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -134,7 +144,7 @@ const NOISE_SCALE  = 1.4;   // ノイズの空間スケール
 const SPEED        = 0.0015; // パーティクルの移動速度
 const LIFETIME_MIN = 400;    // 寿命の最小フレーム数
 const LIFETIME_MAX = 1000;   // 寿命の最大フレーム数
-const SPAWN_RATE   = 87;     // 1フレームあたりの発生数
+const SPAWN_RATE   = 43;     // 1フレームあたりの発生数
 const SPAWN_SPREAD = 0.04;   // 発生位置の初期ランダムばらつき半径
 const HIDDEN_POS   = 9999;   // 非アクティブ時の退避座標
 
@@ -183,9 +193,26 @@ const geometry = new THREE.BufferGeometry();
 geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 geometry.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
 
+// 円形パーティクル用テクスチャを Canvas で生成
+const circleTexture = (() => {
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+    grad.addColorStop(0,   'rgba(255,255,255,1)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.8)');
+    grad.addColorStop(1,   'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(canvas);
+})();
+
 // 加算合成で輝くような見た目に
 const material = new THREE.PointsMaterial({
-    size: 0.025,
+    size: 0.05,
+    map: circleTexture,
+    alphaTest: 0.01,
     vertexColors: true,
     transparent: true,
     opacity: 0.9,
@@ -257,9 +284,20 @@ window.addEventListener('resize', () => {
 
 // ========== アニメーションループ ==========
 let time = 0;
+let lastTimestamp = performance.now();
+let fps = 0;
 
 function animate() {
     requestAnimationFrame(animate);
+
+    // FPS 計算
+    const now = performance.now();
+    fps = Math.round(1000 / (now - lastTimestamp));
+    lastTimestamp = now;
+
+    // ステータス更新
+    statsEl.textContent = `FPS: ${fps}\nParticles: ${activeCount.toLocaleString()}`;
+
     time += 0.004; // 時間の進み速度 (ノイズ場がゆっくり変化する)
 
     // --- 中心からパーティクルを一定数ずつ発生 (O(1)/個) ---
